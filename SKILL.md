@@ -1,208 +1,231 @@
 ---
-name: project-documentation-generator
-description: Generate a complete, evidence-based documentation set for any software project using the ViaSocket/Superheroes docs template structure (AGENTS.md + docs/00-24 numbered guides + api/, database/, modules/, ui/, current-infrastructure/ clones). Use this skill whenever the user points at a project folder, repository, zip, or source tree and asks to document it, generate docs, write an AGENTS.md or CLAUDE.md, produce architecture docs, onboard an AI agent to a codebase, backfill missing documentation, or refresh docs that have drifted from the code — even if they don't name the template by name. Also use it when the user asks "what does this codebase do" in a way that implies a written deliverable, or asks to document APIs, database schemas, modules, or components of an existing project.
+name: ai-docs
+description: "Prepare existing frontends and products for 100% AI-driven coding. Understand and preserve product purpose, establish mental model and architecture, remove dead code/redundant dependencies with evidence, establish a verified canonical doc set (AGENTS.md, VISION.md, ARCHITECTURE.md, FLOWS.md, DESIGN.md, CONTRACTS.md, DEVELOPMENT.md, DECISIONS.md, OPEN_QUESTIONS.md), keep applications dependable, and maintain living project knowledge. Run as /ai-docs [init|prepare|update|check] [area] [--yes]."
+compatibility: "Claude Code, Antigravity, Cursor, and modern agent environments with a local git checkout, Python 3, and subagent/task execution capabilities. Run as /ai-docs [init|prepare|update|check] [area] [--yes]."
 ---
 
-# Project Documentation Generator
+# 100% AI-Driven Frontend Preparation & Documentation
 
-Turn a real codebase into a documentation set that matches a fixed house template — where
-every sentence is traceable to code that actually exists.
+Prepare this frontend repository for 100% AI-driven development.
+Our goal is that **any capable AI coding agent can enter the repository, understand our product and architecture, evaluate a request intelligently, and deliver reliable changes without repeatedly needing humans to explain the system.**
 
-Two failure modes destroy the value of generated docs, so guard against both:
+## Core Division of Responsibility
+- **Humans provide:** Vision, strategic priorities, and business judgment.
+- **AI takes responsibility for:** Deep understanding, implementation, verification, evidence-based refactoring, and maintaining project knowledge.
 
-1. **Invention.** A plausible-sounding endpoint that isn't in the code is worse than no
-   docs at all, because a reader (human or agent) will trust it and build on it. The whole
-   point of these docs is that the repo-root `AGENTS.md` tells the next agent "docs are the
-   source of truth." A hallucinated doc poisons that contract.
-2. **Stub sprawl.** Twenty-five files of `<!-- fill: -->` look like documentation and
-   contain nothing. A reader can't tell "we don't do this" from "nobody wrote it down."
+## Quality Bar
+1. **Evidence only:** Every path, symbol, route, component, token, and env var exists in code at the verified commit.
+2. **One home per fact:** Each domain truth lives in one canonical document; other files link rather than duplicate.
+3. **Project-specific knowledge:** Omit generic coding platitudes; capture the unwritten rules, domain terms, and footguns.
+4. **The "Why" is recorded:** Capture the reasons behind design decisions, past incidents, and rejected alternatives.
+5. **Dependable application:** Refactoring and cleanup must never break existing behavior, appearance, routes, contracts, permissions, analytics, or SEO.
+6. **No empty placeholders:** Every document written has real, verified substance.
 
-Everything below exists to keep those two out.
+Arguments: `$ARGUMENTS`. Default mode is chosen based on repository state:
+- First word `init`, `prepare`, `update`, or `check` selects that mode.
+- If `docs/.ai-docs.json` exists → default is `update`.
+- If no manifest exists → default is `init` (prepare repository).
+- Optional area name narrows `update`. `--yes` skips interactive confirmations.
 
-## Workflow
+---
 
-Work through these phases in order. Don't start writing docs before Phase 3 — the doc plan
-is what keeps you from generating files you have no evidence for.
+## Phase 0: Setup & Baseline Establishment
 
-### Phase 1 — Locate and scope
+Before modifying code or writing documentation, establish and record the current baseline:
 
-Establish the project root (the directory holding the manifest: `package.json`,
-`pyproject.toml`, `go.mod`, `pom.xml`, `Gemfile`, `composer.json`, `Cargo.toml`, `*.csproj`).
-If the user handed you a zip, extract it first and find the real root inside — archives
-usually add a wrapper directory.
+1. **Find Repo Root & Tooling:**
+   - Resolve absolute paths: `REPO` (repo root), `SKILL_DIR` (skill folder), `HEAD_SHORT`, `TODAY` (YYYY-MM-DD), and `WORK` (scratchpad directory with `notes/` subdirectory).
+2. **Establish the Execution Baseline (Pre-flight Checks):**
+   - Run available automated checks:
+     * Package install: `npm install` / `pnpm install` / `yarn install`
+     * Typechecking: `npm run typecheck` (or `tsc --noEmit`)
+     * Linting: `npm run lint`
+     * Test suites: `npm test`
+     * Production build: `npm run build`
+   - Record existing failures, warnings, and error counts in `$WORK/baseline.txt`. Pre-existing defects must be distinguished from newly introduced regressions.
+3. **Capture Representative User Journeys & Visual State:**
+   - Launch dev server or preview build.
+   - Trace core user journeys (login, primary dashboard/view, core interaction flow).
+   - Capture visual state / screenshots of representative screens.
+   - Note network requests, authentication tokens, and console logs.
+4. **Preserve Starting Point:**
+   - Check `git status --porcelain`. Warn if uncommitted changes exist. Ensure unrelated work in progress is preserved.
 
-Check whether `docs/` or `AGENTS.md` already exist. If they do, you are **refreshing**, not
-creating: read what's there first, preserve human-written prose, and only correct what the
-code contradicts. Silently overwriting someone's hand-written architecture notes is the
-fastest way to lose their trust in this skill.
+---
 
-In a monorepo, ask which package to document, or document the whole workspace with one
-`modules/` file per package — but say which you chose.
+## Phase 1: Understand & Preserve Product Purpose
 
-### Phase 2 — Survey, then read
+1. **Recover Purpose from Trustworthy Sources:**
+   - Read the `README.md`, build manifests (`package.json`), landing pages, customer-facing copy, PRDs, founder notes, and git commit history.
+   - Run the repo inventory:
+     ```bash
+     python3 "$SKILL_DIR/scripts/inventory.py" "$REPO" --out "$WORK/inventory.json"
+     ```
+2. **Categorize Product Direction into Four Explicit Statuses:**
+   - **Approved Direction:** Confirmed strategic goals, target audience (ICP), customer problems solved, core principles, and non-goals.
+   - **Current Implementation:** Features and behavior currently functioning in the codebase.
+   - **Proposals & Roadmaps:** Draft PRs, planned features, or upcoming experiments.
+   - **Unknowns & Ambiguities:** Missing product rationale or contradictory behavior.
+   *RULE:* Never invent our vision or assume everything in the current code is intentional.
+3. **Ask the Essential Clarifying Questions (ALWAYS Ask the PR & Deployment Flow):**
+   - If critical product gaps remain, ask the user a single focused question set with the few essential queries needed to fill the gaps.
+   - **MANDATORY QUESTION:** You must ALWAYS ask the user for their exact flow for building PRs and deploying features to production (e.g. `feature branch -> PR & CI -> testing -> stag -> main / production deployment`). Document this flow explicitly in `AGENTS.md` and `docs/DEVELOPMENT.md`.
+4. **Codify Request Evaluation Protocol for Future Agents:**
+   - Future agents must evaluate all requests against this context:
+     * *Improve unclear requests:* Clarify user problem and propose solutions aligned with vision before writing code.
+     * *Explain conflicts & decline contradictions:* If a request violates an approved principle or non-goal, explain why and recommend declining.
+     * *Explicit direction changes:* If the user deliberately changes direction, make that decision explicit and update `docs/VISION.md`.
+     * *Unavailable backend capabilities:* If a requested frontend change needs unavailable backend capabilities, describe the required API contract in `docs/CONTRACTS.md`. **Never fabricate mock integrations or fake endpoints.**
 
-Run the bundled survey script first. It is cheap, deterministic, and it saves you from
-burning context on `ls` and `find` calls:
+---
 
-```bash
-python3 <skill-dir>/scripts/survey_project.py <project-root> --out <scratch>/survey
-```
+## Phase 2: Evidence-Based Refactoring & Cleanup
 
-It writes `survey.md` (read this) and `survey.json` (machine-readable), covering the
-directory tree, file/language counts, detected manifests and dependencies, config files,
-env var names, and candidate route/model/component/test/CI files.
+**Do useful cleanup now. Do not stop after writing an audit or documentation.**
 
-The survey tells you *where to look*. It does not tell you what the code does. Now **read
-the actual files** it flagged — route handlers, model/schema definitions, entry points,
-config. `references/analysis-playbook.md` has the per-ecosystem search patterns for
-finding routes, ORM models, components, auth middleware, external service clients, and CI
-config. Read it before you start grepping; it will save you several passes.
+Follow `references/refactoring-playbook.md` strictly:
+1. **Audit Dead Code Across All 7 Dimensions:**
+   Before removing any file, component, utility, or asset, verify all 7 dimensions:
+   - 1. *Runtime registration:* Dynamic component registries, string-based dispatchers (`registry[type]`).
+   - 2. *Dynamic imports:* `React.lazy()`, `import()`, Next.js `dynamic()`, route code splitting.
+   - 3. *Routing configurations:* File-based routes (`app/`, `pages/`, `routes/`), catch-alls (`[...slug]`), router tables.
+   - 4. *Feature flags & toggles:* Environment variables, remote config flags, conditional rollout blocks.
+   - 5. *CSS & style references:* Tailwind safelists, CSS modules, template classes (`bg-${color}`), SVG symbol sprites.
+   - 6. *Build config & static assets:* Build plugin copies, public folder assets, HTML headers, web manifests.
+   - 7. *External consumers:* Exported libraries, microfrontend remotes, Web Components, iframe embed targets.
+   *Safety Invariant:* Do NOT confuse rarely used functionality, compatibility code, or permission-specific paths with dead code. If uncertain, preserve the code and record the question in `docs/OPEN_QUESTIONS.md`.
+2. **Execute Evidence-Backed Removals:**
+   - Remove genuinely unused files and obsolete static assets.
+   - Prune redundant dependencies from `package.json` (packages with 0 imports in code, or unused devDependencies).
+   - Consolidate overlapping utility libraries (e.g., duplicate date or HTTP helpers).
+   - Record every removal with evidence in `$WORK/removals.md`.
+3. **Simplify Module Boundaries:**
+   - Ensure clear separation between:
+     * *Rendering (Presentation):* UI components accepting props; no direct network calls in JSX.
+     * *Application State:* Stores (Zustand, Redux) and server cache (TanStack Query) owning state transitions.
+     * *API Access:* Typed client wrappers in `src/services/` or `src/api/`.
+     * *Business Rules:* Pure domain helpers in `src/lib/` or `src/utils/`.
+   - Consolidate genuine duplication without forcing unrelated behaviors into brittle generic abstractions.
+4. **Verify Application Dependability Against Baseline:**
+   - Run typecheck, linter, tests, and production build: compare results to Phase 0 baseline.
+   - Launch dev server / preview build and compare screens against pre-cleanup visual captures.
+   - Verify that routes, appearance, contracts, permissions, tenant boundaries, analytics, preferences, and SEO metadata are strictly preserved.
 
-As you read, build an **evidence ledger** at `<scratch>/evidence.md`:
+---
 
-```
-| Claim | Source |
-|---|---|
-| Uses Next.js 15 App Router | package.json:14 ("next": "15.2.0"), app/layout.tsx exists |
-| POST /api/orders creates an order | app/api/orders/route.ts:22-58 |
-| `orders.org_id` is a logical ref to Proxy company.id | lib/server/orders.ts:41 comment |
-```
+## Phase 3: Parallel Subagent Analysis & Deep Mapping
 
-This ledger is the mechanism that makes the no-invention rule enforceable rather than
-aspirational. When you write a doc sentence, it comes from a ledger row. If you want to
-write a sentence and there's no row, either go find the evidence or mark it unknown.
+Dispatch deep-analysis subagents following `references/analysis-playbook.md`. Run in parallel batches (up to 4–5 at a time):
 
-### Phase 3 — Build the doc plan and confirm it
-
-Decide which files you will create, using the three tiers in
-`references/doc-catalog.md` (read it now — it lists every template file, what it's for,
-what code evidence feeds it, and the skip rule):
-
-- **Tier A — always:** the spine an agent needs to navigate the repo at all.
-- **Tier B — only with evidence:** created only if the code shows the concern exists.
-  No analytics SDK anywhere → no `16-analytics.md`. Deleting the file is what the template
-  itself instructs ("Delete this file if unused") and it's how a reader learns the project
-  genuinely doesn't do that thing.
-- **Tier C — human-owned:** product/business docs (vision, goals, personas, journeys,
-  roadmap) that code cannot answer. Create these as the template stub plus a TODO only if
-  the user wants the full set; default to skipping them and say so.
-
-Show the user the planned file list before writing, grouped by tier, with one-line reasons
-for notable inclusions and exclusions. This is a cheap checkpoint that catches
-misunderstandings before you've written 20 files. If the session is unattended, state the
-plan and proceed.
-
-### Phase 4 — Scaffold from the bundled templates
-
-Never retype a template from memory — the numbering, wording, and callout style are house
-convention and small drifts accumulate. Copy them:
-
-```bash
-python3 <skill-dir>/scripts/scaffold_docs.py <project-root> \
-  --files 00,06,07,08,09,12,13,15,18,19,20,22,23,ARCHITECTURE,AGENTS,ROOT_AGENTS \
-  --domains api:orders,api:users \
-  --modules 01-checkout \
-  --infra postgres,redis \
-  --ui shared/data-table \
-  --database entities,relationships
-```
-
-Run it with `--dry-run` first if you want to see the resulting paths. It refuses to
-clobber existing files unless you pass `--force`, and it always keeps each subfolder's
-`_TEMPLATE.md` in place, since the template set treats those as the pattern to clone.
-
-It also writes `CLAUDE.md` containing `@AGENTS.md` (the mirror the template's README
-prescribes) unless one exists.
-
-### Phase 5 — Fill each file from the ledger
-
-Fill in this order, because later files reference earlier ones:
-`00` → `06` → `08` → `ARCHITECTURE` → `07` → `database/` → `current-infrastructure/` →
-`api/` → `ui/` → `modules/` → engineering docs (`09`–`14`, `18`–`20`, `22`–`24`) →
-`docs/AGENTS.md` → root `AGENTS.md`.
-
-Root `AGENTS.md` goes last on purpose: it is a digest of everything else, and the ten
-rules have to reflect what you actually found (real ID types, the real degradation policy)
-rather than the template's example text.
-
-`references/authoring-rules.md` is the style contract — how to mark unknowns, how to cite
-paths, how to keep files from duplicating each other, how to handle the `{{TOKEN}}`
-placeholders. Read it before writing the first file.
-
-The short version, because these four rules carry most of the weight:
-
-- **Cite real paths.** Reference files as `app/api/orders/route.ts`, relative to the
-  project root, so a reader can open them. Line ranges are welcome for specific claims.
-- **Resolve every placeholder you have evidence for; leave the rest verbatim and mark
-  them.** Keep the template's `{{TOKEN}}` / `<!-- fill: -->` where you couldn't determine
-  the answer, and add a callout saying what you looked for:
-
-  ```markdown
-  > [!TODO]
-  > Not determinable from the repository — no CI config found under `.github/workflows/`,
-  > `.gitlab-ci.yml`, or `Jenkinsfile`. Needs a human.
-  ```
-
-  Keeping the placeholder means a `grep -r '{{' docs/` still finds every open item, which
-  is exactly the workflow the template's README describes. The callout tells the human what
-  evidence was missing so they know what to supply.
-- **Separate observed from inferred.** State what the code does plainly. When you're
-  reading intent rather than fact, say so: "Appears to follow a mock-first integration
-  strategy (inferred from `lib/mock/` fixtures alongside live `app/api/**` routes)."
-  Architecture *decisions* and their rationale are almost never in the code — record the
-  observable structure, and leave the "why" as a TODO rather than inventing a rationale.
-- **Say it once.** Each concern has exactly one home. The API response envelope lives in
-  `12-api-guidelines.md`; a specific route's shape lives in `api/<domain>.md`. Elsewhere,
-  link instead of restating, or the two copies will disagree within a month.
-
-### Phase 6 — Verify before you hand it over
-
-Run the checker, which catches the mechanical problems:
-
-```bash
-python3 <skill-dir>/scripts/verify_docs.py <project-root>
-```
-
-It reports unresolved `{{TOKEN}}`s and `<!-- fill: -->` hints that have no accompanying
-TODO callout, broken relative links between docs, and file paths cited in the docs that
-don't exist in the repo — that last one is the invention detector, so treat any hit as a
-bug in the docs, not in the script.
-
-Then do the pass a script can't: re-read each generated file and ask whether every factual
-sentence has a ledger row behind it. Delete or mark anything that doesn't. Finally, tell
-the user what you created, what you deliberately skipped and why, and the list of TODOs
-they need to answer — that TODO list is often the most useful part of the deliverable.
-
-## Reference files
-
-Read these as you reach the phase that needs them; they're separate so this file stays
-navigable.
-
-| File | Read it when | What's in it |
+| Subagent | Role | Generates |
 |---|---|---|
-| `references/doc-catalog.md` | Phase 3 | Every template file: purpose, required evidence, tier, skip rule, and which sibling docs it must link to instead of duplicating |
-| `references/analysis-playbook.md` | Phase 2 | Per-ecosystem detection recipes (JS/TS, Python, Go, Java, Ruby, PHP, .NET) for stack, routes, ORM models, components, auth, external services, tests, CI, infra |
-| `references/authoring-rules.md` | Phase 5 | The style contract: unknown markers, citation format, confidence language, anti-duplication map, numbering/naming conventions, dated plan/brainstorm filenames |
+| **A. Vision Agent** | Recovers product purpose, ICP, value prop, principles, non-goals, request evaluation rules | `docs/VISION.md` + `$WORK/notes/vision.md` |
+| **B. Architecture Agent** | Maps mental model, entry points, rendering, state ownership, Mermaid diagram | `docs/ARCHITECTURE.md` + `$WORK/notes/architecture.md` |
+| **C. Flows Agent** | Traces critical user journeys, happy paths, alternatives, permissions, recovery | `docs/FLOWS.md` + `$WORK/notes/flows.md` |
+| **D. Design System Agent** | Visual principles, reusable component catalog, design tokens, a11y, SEO | `docs/DESIGN.md` + `$WORK/notes/design.md` |
+| **E. Contracts Agent** | Authoritative API schemas, types, auth, persistence, missing backend specs | `docs/CONTRACTS.md` + `$WORK/notes/contracts.md` |
+| **F. Development Agent** | Verified setup, run, build, test, env vars without secrets, safe test-data | `docs/DEVELOPMENT.md` + `$WORK/notes/development.md` |
+| **G. Decisions Agent** | Architectural decisions (ADRs), rationale, git history, rejected alternatives | `docs/DECISIONS.md` + `$WORK/notes/decisions.md` |
+| **H. Existing-Docs Agent** | (If legacy docs exist) Adopts valuable rationale and incident lessons into the suite | `$WORK/notes/_existing-docs.md` |
 
-## Bundled assets and scripts
+Each subagent reads its template in `assets/templates/`, writes its doc, verifies with `scripts/verify_docs.py`, and outputs structured notes.
 
-- `assets/templates/` — the documentation template set, verbatim. `AGENTS.md` for the repo
-  root and `docs/` with the numbered guides plus the seven `_TEMPLATE.md` clones. This is
-  the source of truth for structure; copy from it, don't reconstruct it.
-- `scripts/survey_project.py` — deterministic project inventory and stack detection
-  (Phase 2).
-- `scripts/scaffold_docs.py` — copies selected templates into the target repo with the
-  right names and numbering (Phase 4).
-- `scripts/verify_docs.py` — post-generation checks for unmarked placeholders, broken
-  doc links, and cited paths that don't exist (Phase 6).
+---
 
-All three scripts take `--help` and use only the Python standard library, so they run
-anywhere Python 3.8+ is available.
+## Phase 4: Authoring the Canonical Documentation Suite
 
-## Scope boundaries
+1. **Synthesize Cross-Cutting Notes:**
+   - Run `python3 "$SKILL_DIR/scripts/notes_digest.py" "$WORK/notes"`.
+   - Reconcile any contradictions between notes by reading source code.
+2. **Finalize Canonical Suite:**
+   - Review and polish the 8 canonical documents under `docs/`:
+     * `docs/VISION.md`
+     * `docs/ARCHITECTURE.md`
+     * `docs/FLOWS.md`
+     * `docs/DESIGN.md`
+     * `docs/CONTRACTS.md`
+     * `docs/DEVELOPMENT.md`
+     * `docs/DECISIONS.md`
+     * `docs/OPEN_QUESTIONS.md`
+3. **Author Root `AGENTS.md` (Last):**
+   - Use `assets/templates/AGENTS.md`. Keep under ≤150 lines.
+   - Include:
+     * Product scope and purpose summary (2–3 sentences).
+     * Exact, verified commands (install, dev, build, typecheck, lint, test, preview).
+     * Reading order directing agents to `docs/VISION.md` and `docs/ARCHITECTURE.md` first, then to task-relevant flows and contracts.
+     * 10–15 numbered project rules an agent would break without being told (with reasons/evidence).
+     * Directory map.
+     * **PR & deployment flow:** The confirmed promotion pipeline (e.g. `testing -> stag -> main`) and branching rules.
+     * Verification and documentation update expectations.
+4. **Wire Up Tool Adapters:**
+   - `CLAUDE.md`: Ensure `@AGENTS.md` is present.
+   - Other agent files (`.cursorrules`, `GEMINI.md`, `.github/copilot-instructions.md`): Point to `AGENTS.md` if user approves.
+   - Write `docs/.ai-docs.json` manifest.
 
-This skill documents what exists. It does not review code quality, propose refactors, fix
-bugs, or write the product's business strategy. If the user wants those, do them as
-separate work — mixing "here's what your code does" with "here's what I think you should
-change" makes the docs unciteable, because a reader can no longer tell which statements
-describe the repo.
+---
+
+## Phase 5: Verification & Fresh-Agent Simulation
+
+1. **Automated Mechanical Verification:**
+   ```bash
+   python3 "$SKILL_DIR/scripts/verify_docs.py" "$REPO"
+   ```
+   - Fix every ERROR by aligning docs to code (never inventing code).
+   - Ensure all `covers:` globs resolve and no broken links exist.
+   - Re-run until **0 errors**.
+2. **Fresh-Agent Simulation & Quiz:**
+   - Dispatch the Fresh-Agent simulation (Playbook J) given 6–8 repo-specific questions.
+   - The simulator reads ONLY `AGENTS.md` and `docs/` (no code, no git).
+   - Verify that a fresh session can:
+     * Locate the vision and product purpose.
+     * Trace a representative user journey.
+     * Identify the correct implementation area for a new feature.
+     * Find relevant verification commands and rules.
+   - Patch any gaps, ambiguities, or navigation friction uncovered by the simulation.
+
+---
+
+## Phase 6: Final Deliverable Report
+
+Present a concise, structured report covering:
+1. **What Became Simpler & Why:** Summary of architectural clarity gained, module boundary improvements, and reduced complexity.
+2. **Significant Code & Dependencies Removed:** Explicit list of removed files, dead exports, unused assets, and pruned dependencies, with supporting evidence.
+3. **The Documentation Map:** Overview of the canonical suite (`AGENTS.md`, `VISION.md`, `ARCHITECTURE.md`, `FLOWS.md`, `DESIGN.md`, `CONTRACTS.md`, `DEVELOPMENT.md`, `DECISIONS.md`, `OPEN_QUESTIONS.md`).
+4. **Checks Performed & Verification Results:** Baseline vs final verification status (typecheck, lint, tests, build, browser checks, doc verifier).
+5. **Remaining Verification Gaps:** Third-party credentials, staging services, or sandbox dependencies unavailable during preparation.
+6. **Unresolved Product Questions & Technical Risks:** Key items recorded in `docs/OPEN_QUESTIONS.md`.
+7. **Remaining Work & How to Resume/Revert:** Clear instructions on branching, resume checkpoints, and rollback commands.
+
+---
+
+## Mode: update (Knowledge Maintenance)
+
+Follow `references/update-mode.md`:
+1. **Evaluate Request:** Compare user request against `docs/VISION.md`, `docs/ARCHITECTURE.md`, and `docs/CONTRACTS.md`.
+2. **Detect Drift:** Run `python3 "$SKILL_DIR/scripts/affected_docs.py" "$REPO"`.
+3. **Synchronous Update:** Update affected docs, sequence diagrams, and contracts in the same commit that changes code.
+4. **Maintain Progress Records:** Keep concise notes during multi-step tasks.
+5. **Re-Verify:** Run `verify_docs.py` until 0 errors, bump `verified_at` and `verified_on`, update manifest.
+
+---
+
+## Mode: check (Read-Only Audit)
+
+Run read-only verification:
+```bash
+python3 "$SKILL_DIR/scripts/verify_docs.py" "$REPO"
+python3 "$SKILL_DIR/scripts/affected_docs.py" "$REPO"
+```
+Report error counts, stale docs, unmapped code, and broken claims. Output: "run `/ai-docs update` to fix". Writes no files.
+
+---
+
+## Critical Rules ("Never")
+
+- **Never invent product vision, personas, or intent:** Unknown and important → record in `docs/OPEN_QUESTIONS.md`.
+- **Never fabricate working integrations:** If a backend capability is missing, describe the required contract in `docs/CONTRACTS.md`.
+- **Never remove code without conclusive evidence across all 7 dimensions:** Runtime registrations, dynamic imports, routing configs, feature flags, CSS references, build configs, and external consumers must be checked.
+- **Never weaken tests, suppress lint rules, or lower verification standards** merely to make checks pass.
+- **Never commit secrets or credentials:** Document variable names and defaults only.
+- **Never perform unrequested major framework migrations or broad dependency rewrites.**
+- **Never delete or commit files without explicit authorization.**

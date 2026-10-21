@@ -1,45 +1,61 @@
-# Agent Guide — {{PRODUCT_NAME}}
+# {{PROJECT_NAME}}
 
-> This file (mirrored to `CLAUDE.md` via `@AGENTS.md`) is the first thing an AI agent or
-> new engineer reads. Keep it short and imperative. Deep detail lives in `docs/`.
+<!-- fill: 2-3 sentences. What this product is, whom it serves, what problems it solves, and its high-level technical shape. No marketing fluff. -->
 
-## Read before you write
+## Commands
 
-You MUST read the relevant guide in [`docs/`](docs/) before writing code or changing
-structure. Start with:
+<!-- fill: exact, verified commands. Drop rows that do not exist (e.g. no tests yet). -->
+| Task | Command |
+|---|---|
+| Install dependencies | `{{install_cmd}}` |
+| Run dev server | `{{dev_cmd}}` |
+| Build for production | `{{build_cmd}}` |
+| Type check | `{{typecheck_cmd}}` |
+| Lint / format | `{{lint_cmd}}` |
+| Run unit / integration tests | `{{test_cmd}}` |
+| Run E2E / browser tests | `{{e2e_cmd}}` |
+| Preview production build | `{{preview_cmd}}` |
 
-- [`docs/AGENTS.md`](docs/AGENTS.md) — the hard rules for this codebase (read this first)
-- [`docs/00-project-overview.md`](docs/00-project-overview.md) — what this product is
-- [`docs/07-system-architecture.md`](docs/07-system-architecture.md) — how it fits together
-- [`docs/08-folder-structure.md`](docs/08-folder-structure.md) — where things go
+## Reading Order Before You Change Code
 
-If your framework/library has vendored docs (e.g. `node_modules/<pkg>/dist/docs/`),
-read those instead of relying on training data — versions drift and APIs break.
+Always check documentation before planning or modifying code:
+1. **Product Purpose & Boundaries:** [docs/VISION.md](docs/VISION.md) — Evaluate requests against approved direction; never invent vision or fabricate backend integrations.
+2. **Mental Model & Data Flow:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Understand module boundaries, state ownership, rendering, and sources of truth.
+3. **User Journey Context:** [docs/FLOWS.md](docs/FLOWS.md) — Check user paths, permissions, alternative branches, and failure recovery for affected features.
+4. **Visual & UI Standards:** [docs/DESIGN.md](docs/DESIGN.md) — Component reusability, design tokens, responsiveness, accessibility, and messaging.
+5. **API & Persistence Types:** [docs/CONTRACTS.md](docs/CONTRACTS.md) — Authoritative schemas, auth assumptions, analytics events, and data relationships.
+6. **Environment & Verification:** [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — Setup details, test data guidance, and how to verify your changes.
+7. **Lessons & Past Choices:** [docs/DECISIONS.md](docs/DECISIONS.md) — Rationale behind architectural choices and superseded approaches.
+8. **Known Ambiguities:** [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) — Unresolved dependencies, technical debt, and pending decisions.
 
-## Quick reference
+## Project Rules & Boundaries
 
-- **Architecture:** <!-- fill: one-line description, e.g. "Mock-first V1 → real backend integration; UI calls `/api/**`, never raw databases." -->
-- **Tech stack:** {{FRAMEWORK}}, {{LANGUAGE}}, {{STYLING}}, {{DB}} <!-- keep in sync with docs/06-tech-stack.md -->
-- **Security:** Secrets stay server-side. Never import server-only clients into client code.
-- **ID mapping:** <!-- fill: how identifiers map across your systems -->
-- **Graceful degradation:** If a backend fails, return `null` for that data block — don't 500 the whole page.
-- **Documentation:** Update `docs/**` in the same commit as any contract change.
+<!-- fill: 10–15 project-specific rules an agent would break without being told.
+     Each rule: imperative sentence + concrete "because" / rationale or link to evidence.
+     Numbered so code reviews can cite "breaks Rule 3". No generic advice like "write clean code". -->
+1. {{Rule}} — {{because / link}}.
 
-## The ten rules
+## Where Things Are
 
-1. **Docs are the source of truth.** Disagreement between code and docs is a bug. Fix both.
-2. **Read the guide for the area you're touching** before editing (`docs/api`, `docs/modules`, `docs/database`, ...).
-3. **Respect server/client boundaries.** Secrets and DB clients never reach the browser bundle.
-4. **Go through the API layer.** UI never talks to a database or external service directly.
-5. **Fail soft.** Catch backend errors and degrade to `null`/empty/mock — keep the app navigable.
-6. **Map IDs deliberately.** Never assume one ID type works everywhere; pass the type each source needs.
-7. **Stay inside the sanctioned stack.** Don't add a second charting/icon/animation library.
-8. **Prefer the platform's defaults.** Server components / SSR / built-in routing over bespoke abstractions.
-9. **Small, reviewable changes.** One concern per PR; follow `docs/23-git-workflow.md`.
-10. **Update docs when you learn something.** New infra fact or changed contract → update `docs/` now, not later.
+<!-- fill: 6–10 bullets mapping the top-level directories that matter and what lives there. Link, do not copy, tables. -->
+- `{{path}}/` — {{role and responsibility}}
 
-## When something isn't documented
+## PR & Deployment Flow
 
-If you discover a fact about infrastructure, an API contract, or a data model that isn't
-written down: **write it down** in the right `docs/` file as part of your change. The next
-agent depends on it.
+<!-- fill: the exact flow for building a PR and deploying to production.
+     Always ask the human for their specific pipeline if not documented in CI workflows: e.g. feature -> PR -> testing -> stag -> main. -->
+- **Branching Strategy:** `feature/<name>` or `fix/<name>` branched from `{{main / develop}}`.
+- **Pre-PR Quality Gate:** Run `{{test_cmd}}`, `{{typecheck_cmd}}`, `{{lint_cmd}}`, `{{build_cmd}}`, and `python3 scripts/verify_docs.py .`.
+- **Deployment Pipeline:** `{{testing -> stag -> main}}`
+  1. **PR & Automated Checks:** Open PR against `{{stag / main}}`. CI runs lint, typecheck, tests, and deploys preview.
+  2. **Testing Environment:** Merge to test branch triggers deployment to `{{testing / QA}}` for automated/manual acceptance.
+  3. **Staging Environment (`stag`):** Promotion to staging for pre-release validation and stakeholder sign-off.
+  4. **Production Deployment (`main`):** Merge to `main` deploys to production following required approvals.
+
+## Verification & Knowledge Maintenance Expectations
+
+- **Establish baseline before changes:** Run existing checks (`{{test_cmd}}`, `{{build_cmd}}`) and note known failures before editing.
+- **Dependable application invariants:** Preserve existing routes, UI appearance, permissions, tenant boundaries, analytics, SEO metadata, and saved user preferences.
+- **Evidence-based cleanup:** Never remove code merely because product rationale is unclear. Check runtime registration, dynamic imports, routing, feature flags, CSS references, build configs, and external consumers before removing.
+- **Maintain project docs:** When changing behavior, schemas, routes, or design tokens, update the corresponding `docs/*.md` files in the same commit.
+- **Run doc verification:** Run `python3 scripts/verify_docs.py .` and ensure 0 errors before submitting work.

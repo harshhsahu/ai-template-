@@ -1,229 +1,349 @@
-# Analysis playbook — how to find the facts
+# Analysis Playbook: Subagent Prompts & Workflows
 
-Read this in Phase 2, after `survey_project.py` has told you where things are. The survey
-locates candidate files; this file tells you what to extract from them and in what order,
-per ecosystem.
+The orchestrator (main thread) plans the work, coordinates parallel subagents, performs evidence-based refactorings, and writes `AGENTS.md`. Subagents perform deep, focused reading across the codebase. Each subagent owns its designated output document, ensuring parallel agents never edit the same file. Every agent outputs a structured notes file to inform the orchestrator.
 
-## Contents
+---
 
-- [Order of investigation](#order-of-investigation)
-- [Stack identification](#stack-identification)
-- [Finding routes and endpoints](#finding-routes-and-endpoints)
-- [Finding data models and schemas](#finding-data-models-and-schemas)
-- [Finding UI components and navigation](#finding-ui-components-and-navigation)
-- [Finding auth and security](#finding-auth-and-security)
-- [Finding external services and infrastructure](#finding-external-services-and-infrastructure)
-- [Finding tests, CI and deployment](#finding-tests-ci-and-deployment)
-- [Deriving purpose and features](#deriving-purpose-and-features)
-- [Architecture: what you may and may not conclude](#architecture-what-you-may-and-may-not-conclude)
-- [Multi-app repos](#multi-app-repos)
+## Ground Rules for Every Subagent Prompt
 
-## Order of investigation
+- **Pass paths, not file contents:** Pass the repo root, inventory JSON path, workspace notes dir, and reference file paths.
+- **Reference standards:** Subagents must read `{{SKILL_DIR}}/references/writing-rules.md` and the relevant template from `{{SKILL_DIR}}/assets/templates/` before writing.
+- **Strict output boundaries:** Subagents write ONLY their assigned output document and their designated notes file. They must not alter unrelated files or git state.
+- **Self-verification:** Every subagent runs the doc verifier on its output before finishing and corrects any ERRORs:
+  `python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}`.
+- **Concise final reply:** At most 15 lines. State the document written, verifier result, and top 5 key findings. The deep details go in the notes file to preserve orchestrator context.
+- **Run in parallel batches:** Launch complementary subagents in parallel batches of up to 4–5 agents.
 
-Manifest → config → entry point → routes → models → views/components → tests.
+---
 
-This order works because each step narrows the next. The manifest names the framework,
-which tells you the routing convention, which gives you the endpoint list, which names the
-models each endpoint touches. Reading components before you know the routes means reading
-files without knowing why they matter.
+## Notes File Format
 
-Budget your reading: the highest information-per-token files are the manifest, the settings
-or config module, the URL/route table, and the model or migration files. A 2000-line view
-file can often be skimmed for its class/function signatures and decorators.
+Every subagent writes `{{WORKDIR}}/notes/<name>.md` following this structure. The orchestrator uses these notes to synthesize cross-cutting insights:
 
-## Stack identification
+```md
+# Notes: <name>
 
-Read manifests **and** lockfiles. The manifest gives the declared range (`^5.1`), the
-lockfile gives the version actually installed — cite the resolved version, since that's
-what the code runs against.
+## Summary
+Two concise sentences: what this area is, whom it serves, and why it matters.
 
-| File | Ecosystem | Also read |
-|---|---|---|
-| `package.json` | Node/JS/TS | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `tsconfig.json`, bundler config (`vite.config.*`, `next.config.*`, `webpack.*`) |
-| `requirements.txt`, `pyproject.toml`, `Pipfile` | Python | `poetry.lock`, `uv.lock`, `setup.cfg`, `manage.py` (⇒ Django) |
-| `go.mod` | Go | `go.sum` |
-| `pom.xml`, `build.gradle(.kts)` | Java/Kotlin | `application.yml`/`.properties` |
-| `Gemfile` | Ruby | `Gemfile.lock`, `config/routes.rb` (⇒ Rails) |
-| `composer.json` | PHP | `composer.lock`, `artisan` (⇒ Laravel) |
-| `Cargo.toml` | Rust | `Cargo.lock` |
-| `*.csproj`, `*.sln` | .NET | `appsettings.json` |
+## Vision & Purpose
+- ICP / Persona: <Target user>
+- Core Problem Solved: <Pain point>
+- Key Principle / Constraint: <Guiding philosophy>
+- Non-goals: <Explicit out-of-scope items>
 
-Classify each dependency by the concern it serves, because `06-tech-stack.md` and the
-"one library per concern" rule are both organized that way: framework, styling, UI
-components, icons, charts, animation, state, data-fetching, forms/validation, ORM/data
-access, auth, testing, build. **Two libraries for one concern is a finding** — the template
-treats it as review-blocking, so record it in `docs/AGENTS.md` as a conflict to resolve
-rather than listing both as approved.
+## Architecture & State
+- Module / Layer: <Path> — Responsibility: <Role>
+- State Ownership: <Store / Query cache / Context>
+- Rendering Pattern: <SSR / SPA / Hybrid>
 
-## Finding routes and endpoints
+## Flows & Journeys
+- Critical Journey: <Trigger route> → <Action> → <API call> → <Outcome>
+- Guard / Permission: <Enforcement location>
+- Failure Handling: <Recovery mechanism>
 
-| Stack | Where routes live | What to extract |
-|---|---|---|
-| Django REST Framework | `urls.py` (project + app), `routers.DefaultRouter()` registrations, `ViewSet` classes | Router `basename`/prefix expands to the standard six endpoints; `@action(detail=…, methods=[…])` adds custom ones — these are easy to miss, so grep for `@action` |
-| Django (plain) | `urlpatterns` in every `urls.py` | `path()`/`re_path()` route, view, `name=` |
-| Flask / FastAPI | `@app.route`, `@router.get/post/...`, `APIRouter(prefix=)`, `include_router` | Method, path, response_model, dependencies |
-| Express / Nest / Fastify | `app.use`, `router.get(...)`, `@Controller`/`@Get` decorators | Mount prefixes compose — trace `app.use('/api/x', router)` to get full paths |
-| Next.js | `app/**/route.ts` (App Router), `pages/api/**` | Exported `GET`/`POST`/... names; dynamic segments `[id]` |
-| Rails | `config/routes.rb` | `resources :x` expands to seven routes; run/read the resource macros carefully |
-| Laravel | `routes/api.php`, `routes/web.php` | `Route::apiResource` expansion, middleware groups |
-| Spring | `@RestController` + `@RequestMapping`/`@GetMapping` | Class-level prefix + method-level path compose |
-| Go | `http.HandleFunc`, chi/gin/echo router setup | Mount groups |
+## Design & UI Primitives
+- Reusable Components: <Name> (`path:symbol`) — Props: <props>
+- Tokens & Theming: <Token file> — Dark mode: <mechanism>
+- A11y & SEO: <Heading rules, meta standards>
 
-For each endpoint the `api/_TEMPLATE.md` needs: path, method, purpose, path params, query
-params, data sources (which model/service/function), the actual response shape, and
-behavior notes. Get the response shape from the serializer / DTO / schema / returned
-literal — **not** from the endpoint's name. `fields = "__all__"` on a serializer means you
-must read the model to enumerate fields.
+## Contracts & APIs
+- Endpoints: <METHOD /path> → Handler/Client: `path:symbol` — Auth: <auth>
+- TypeScript Types: `path:Type`
+- Missing Backend Needs: <Unavailable capability description>
 
-Also capture cross-cutting route behavior, since `12-api-guidelines.md` needs it:
-pagination class and default page size, filter/search/ordering backends, auth classes,
-throttles, and the error envelope.
+## Development & Verification
+- Commands: install, dev, build, test, preview
+- Environment Variables: <VAR> (required/optional, client-exposed?)
+- Safe Test Data: <Mock users or sandbox guidelines>
 
-## Finding data models and schemas
+## Decisions & Lessons
+- Decision: <Choice made> — Evidence: <Commit/PR> — Rejected alternative: <Why rejected>
 
-**Migrations are the most reliable source** — they are what was actually applied. Read
-model definitions for intent and migrations for truth; where they differ, document the
-migration state and flag the drift.
+## Refactoring & Dead Code Candidates (Evidence-Backed)
+- Candidate: `path:symbol` — Evidence checked: <7 dimensions verified> — Recommendation: <Delete / Preserve>
 
-| Stack | Read |
-|---|---|
-| Django | `*/models.py`, `*/migrations/00*.py` (read all, in order — later ones alter earlier fields) |
-| SQLAlchemy / Alembic | model classes, `alembic/versions/*` |
-| Prisma | `schema.prisma` (authoritative and self-contained) |
-| TypeORM / Sequelize / Mongoose | entity/model files, `migrations/` |
-| Rails | `db/schema.rb` (authoritative), `db/migrate/*` |
-| Raw SQL | `*.sql`, `schema.sql`, `init.sql` |
+## Open Questions & Ambiguities
+- Question: <Genuine unknown needing human confirmation> — Affected code: `path:symbol`
+```
 
-Extract per entity: table name, every column with type and null/default, PK, FKs and their
-`on_delete` behavior, unique constraints and composite uniques, indexes, and enum/choice
-values. Also record model-level `Meta` options (ordering, `unique_together`), computed
-`@property` fields (they appear in API responses but not in the table), and signals or
-hooks that write data implicitly.
+---
 
-The `database/_TEMPLATE.md` reserves a **Cross-System References** section for logical
-references that are not foreign keys. These cause the most cross-system bugs and are only
-discoverable by reading code — an `org_id` integer column with no FK, joined manually in a
-service function. Look for them deliberately: columns named `*_id` with no `ForeignKey`,
-and manual joins or lookups in service/repository code.
+## A. Product Purpose & Vision Agent
 
-## Finding UI components and navigation
+Writes `docs/VISION.md` and notes with questions for human clarification.
 
-Start from the router to get the screen list, then follow imports down:
+```text
+You are analyzing the product purpose, vision, and strategic boundaries of the repository at {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}}. Existing docs/README: {{EXISTING_DOC_PATHS}}.
 
-- React Router: `<Route path element>` trees, often in `App.jsx`/`routes.tsx`
-- Next.js: the `app/`/`pages/` file tree *is* the route table
-- Vue Router / Angular: `routes` array, `RouterModule.forRoot`
-- Server-rendered: template directory plus the view that renders each template
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/VISION.md
 
-`05-navigation.md` wants the top-level route table, the navigation model (sidebar? topbar?
-command palette?), and deep-link conventions — read the sidebar/nav component for the
-first two and the dynamic route segments for the third.
+Tasks:
+1. Discover the product purpose from trustworthy sources: README, package.json (description, keywords), landing pages, user-facing copy, PRDs, founder notes, and git commit history.
+2. Distinguish four statuses:
+   - Approved Direction: Stated purpose and confirmed boundaries.
+   - Current Implementation: Features actually built in code.
+   - Proposals & Roadmaps: Features in progress or planned in issues/PRs.
+   - Unknowns: Unclear intent or undocumented features.
+3. Define the ICP, customer problems solved, value proposition, core principles, priorities, and explicit non-goals.
+4. Establish instructions for future AI agents on evaluating requests against this vision (improving unclear requests, explaining conflicts, declining contradictory changes, and describing backend contracts without fabricating mock endpoints).
+5. Write {{OUTPUT_DOC}} (docs/VISION.md) and {{WORKDIR}}/notes/vision.md.
+6. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, top 5 strategic findings, and essential questions for the user.
+```
 
-For `ui/` docs, extract from each shared component: import path, props with types and
-defaults (TS interfaces, PropTypes, or destructured defaults), variants, and
-loading/empty/disabled states. Note which components are imported in more than one place —
-that's what makes them shared rather than one-off.
+---
 
-For `10-design-system.md`: `tailwind.config.*` theme extensions, CSS custom properties in
-the global stylesheet, font imports, and the dark-mode strategy (`darkMode:` setting, a
-theme context/provider, a `data-theme` attribute).
+## B. Architecture & State Agent
 
-## Finding auth and security
+Writes `docs/ARCHITECTURE.md`.
 
-- **Mechanism:** JWT (look for token libraries, `SIMPLE_JWT` settings, refresh endpoints),
-  session cookies, OAuth provider config, API keys.
-- **Where it's enforced:** middleware, decorators (`@login_required`,
-  `IsAuthenticated`), permission classes, route guards, `ProtectedRoute` wrappers.
-- **Roles and object-level rules:** custom permission classes and queryset filtering by
-  the request user — `get_queryset` filtering is a real access-control boundary and is easy
-  to overlook.
-- **Client-side token storage:** `localStorage` vs `httpOnly` cookie, and the refresh
-  interceptor. Worth documenting precisely because it's a common finding.
-- **Secrets:** collect env var *names* from `.env.example`, `os.environ`/`process.env`
-  reads, and settings modules. Never copy a value out of a committed `.env` into the docs.
-  If a real secret appears committed, say so as a security note and don't reproduce it.
-- **CORS/CSRF, rate limits, validation:** middleware and settings keys.
+```text
+You are documenting the system mental model, modular architecture, rendering, and state ownership of {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (entry_points, frameworks, routes).
 
-## Finding external services and infrastructure
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/ARCHITECTURE.md
 
-One `current-infrastructure/<system>.md` per system you actually talk to. Find them via:
-the database engine in settings/env, cache/queue clients (Redis, Celery, RabbitMQ), SDK
-imports (S3, Stripe, Twilio, SendGrid, Firebase), raw HTTP calls to external hosts, and
-service definitions in `docker-compose.yml`.
+Tasks:
+1. Identify the real entry point and startup sequence (e.g. index.html, main.tsx, app/layout.tsx, router configs).
+2. Map the major modules, layers, responsibilities, and dependency rules (what may call what, what must not).
+3. Document rendering patterns: SSR vs SPA vs SSG, client/server boundaries (`use client`), Suspense boundaries.
+4. Document application state ownership: server cache (TanStack Query, SWR), global client stores (Zustand, Redux), URL state, and form state.
+5. Trace how network requests flow through API clients, auth injection, and error interceptors.
+6. Create a compact Mermaid architecture diagram (≤12 nodes).
+7. Write {{OUTPUT_DOC}} (docs/ARCHITECTURE.md) and {{WORKDIR}}/notes/architecture.md.
+8. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and top 5 architectural facts.
+```
 
-Per system capture: role (what it's the source of truth for), connection env var and
-client module path, auth method, access posture (read-only?), the entities/endpoints you
-touch, the functions your code calls, and **degradation behavior** — what happens when it's
-down. If the code doesn't handle that, the honest entry is "no fallback; requests fail"
-plus a TODO, and that's a genuinely useful finding.
+---
 
-The template's `_TEMPLATE.md` opens with a `> [!WARNING]` for the system's #1 footgun. Fill
-it only with a real footgun you found (an ID that isn't a foreign key, a table that looks
-authoritative but isn't). If you didn't find one, delete the warning block rather than
-inventing a scary-sounding caveat.
+## C. User Flows Agent
 
-## Finding tests, CI and deployment
+Writes `docs/FLOWS.md`.
 
-- Tests: runner config (`pytest.ini`, `jest.config.*`, `vitest.config.*`), test file
-  locations and naming, fixtures/factories, and roughly what layer they cover (unit /
-  integration / e2e). Count test files and note obvious gaps; don't compute a coverage
-  percentage you can't measure.
-- CI: `.github/workflows/*`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml` — the
-  job steps *are* the merge gate, which feeds `22-definition-of-done.md`.
-- Deployment: `Dockerfile` (base image, build stages, exposed port, entrypoint),
-  `docker-compose.yml` (services and their wiring), `nginx.conf`, `Procfile`,
-  `vercel.json`, `fly.toml`, k8s manifests, Terraform.
-- Entrypoint scripts (`entrypoint.sh`) often reveal migration-on-boot, static collection,
-  and the production server command — exactly what `20-deployment.md` needs.
+```text
+You are documenting the critical user journeys and interactive flows of {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (routes, next_routes, components).
 
-## Deriving purpose and features
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/FLOWS.md
 
-You can support these from code without inventing:
+Tasks:
+1. Map the 3–5 most critical user journeys (e.g. auth/onboarding, primary feature workflow, checkout/submission, settings).
+2. For each journey, trace the complete path connecting:
+   - User action & route URL
+   - Entry component and UI trigger
+   - State transition / optimistic update
+   - API dispatch and payload
+   - Response handling and storage
+3. Document alternative branches and conditional paths.
+4. Document role-based permissions and route guard enforcement.
+5. Document failure modes: offline handling, 401 token refresh, 422 validation highlights, 500 boundary recovery.
+6. Provide focused Mermaid sequence diagrams for complex flows.
+7. Write {{OUTPUT_DOC}} (docs/FLOWS.md) and {{WORKDIR}}/notes/flows.md.
+8. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and top flows documented.
+```
 
-- **Purpose:** manifest `description`, README, the domain vocabulary of the models. Five
-  models named Building/Floor/Room/Tenant/Lease tell you the domain unambiguously.
-- **Features:** the route groups and screen list. Each user-facing route group is a
-  feature; name it from the code's own vocabulary, not marketing language.
-- **Scheduled behavior:** management commands, cron definitions, and task queues reveal
-  features no route shows (e.g. a monthly billing generator). Look for them — they're the
-  most commonly missed features.
+---
 
-You cannot support the *value* claim ("saves landlords 10 hours a month"). Describe what
-the feature does; leave the value framing to the human.
+## D. Design System & UI Agent
 
-## Architecture: what you may and may not conclude
+Writes `docs/DESIGN.md`.
 
-**May conclude from structure:** the layer diagram and what talks to what; whether the UI
-goes through an API layer or reaches data directly; where the boundary between server-only
-and client code sits; whether state is server-fetched or client-held; the deployment
-topology from Docker/compose; the auth flow.
+```text
+You are documenting the visual design system, UI components, tokens, and frontend standards of {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (components, styling configs).
 
-**May label as inferred:** the integration phase (mock-first vs integrated) from the
-presence of fixture/mock modules next to live clients; an intended pattern from consistent
-naming.
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/DESIGN.md
 
-**May not conclude:** why a decision was made, which alternatives were rejected, planned
-phases, performance budgets, or SLAs. The `ARCHITECTURE.md` "Integration Strategy" and
-phase list are frequently unanswerable from code — describe the current state and leave the
-forward-looking phases as a TODO. An invented rationale is the most damaging kind of
-invention, because it will be cited in future design debates.
+Tasks:
+1. Document visual and interaction principles (color harmony, typography, micro-interactions, dark mode).
+2. Document design tokens: token sources (Tailwind, CSS vars, theme files), color palette, typography scale, spacing.
+3. Build the Reusable Component Catalog: table of shared UI primitives (`Button`, `Modal`, `Input`, `Card`, `Toast`), file locations, purpose, and key props.
+4. Document responsive behavior and breakpoints (mobile, tablet, desktop).
+5. Document accessibility standards: semantic HTML, keyboard focus, ARIA patterns, contrast compliance.
+6. Document microcopy conventions, empty states, and SEO expectations (titles, meta descriptions, headings, OpenGraph).
+7. Write {{OUTPUT_DOC}} (docs/DESIGN.md) and {{WORKDIR}}/notes/design.md.
+8. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and component inventory summary.
+```
 
-## Multi-app repos
+---
 
-A separate backend and frontend directory (or several packages) is the common case.
-Document them as **one docs set** describing one product, not two disconnected sets, unless
-the user wants otherwise — the whole value is showing how the halves connect.
+## E. Contracts & Data Agent
 
-Practical approach:
+Writes `docs/CONTRACTS.md`.
 
-- `06-tech-stack.md`: one table with a Layer column covering both.
-- `08-folder-structure.md`: show both trees under one root.
-- `ARCHITECTURE.md` / `07`: this is where the halves meet. Trace one real request end to
-  end — client API module → HTTP call → server route → model → response — and note the base
-  URL env var that binds them.
-- `api/` files: document the server's contract, and note which client module consumes each
-  domain (a `src/api/paymentsApi.js` next to `api/payments.md` is a strong pairing).
-- `modules/`: organize by product feature, which usually spans both halves.
-- Verify the two halves actually agree. A client calling an endpoint the server doesn't
-  expose (or vice versa) is a real finding worth recording — and exactly the kind of thing
-  docs are supposed to surface.
+```text
+You are documenting authoritative API schemas, types, and persistence contracts of {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (routes, env_vars, data_hits).
+
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/CONTRACTS.md
+
+Tasks:
+1. Map authoritative TypeScript types and domain entities (reference `path:Type`; do not duplicate raw definitions).
+2. Document backend API routes called by the frontend: method, full path, auth requirements, request/response types.
+3. Document authentication assumptions: token storage, refresh cycle, and tenant isolation headers.
+4. Document client persistence contracts: localStorage keys, sessionStorage, query cache keys.
+5. Document analytics and telemetry event contracts.
+6. Check for missing or incomplete backend capabilities required by frontend code. Describe required API contracts explicitly without fabricating mock implementations.
+7. Write {{OUTPUT_DOC}} (docs/CONTRACTS.md) and {{WORKDIR}}/notes/contracts.md.
+8. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and contracts summary.
+```
+
+---
+
+## F. Development & Verification Agent
+
+Writes `docs/DEVELOPMENT.md`.
+
+```text
+You are documenting the verified local setup, build, testing, and agent verification workflows for {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (manifests, infra, tooling, env_vars).
+
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/DEVELOPMENT.md
+
+Tasks:
+1. Extract and verify runtime prerequisites (Node.js version, package manager, system tools).
+2. Document verified step-by-step setup commands (install, env file setup, dev server launch).
+3. Document all environment variables read by the frontend: required vs optional, defaults, client-exposed flags (NEXT_PUBLIC_*, VITE_*). NEVER copy live secrets.
+4. Document build, preview, and test commands (typecheck, lint, unit test, E2E test).
+5. Document safe test-data guidance: sandbox users, mock handlers (MSW), tenant boundaries.
+6. Document the PR workflow & deployment pipeline (e.g. `feature -> testing -> stag -> main/production`, branching conventions, environment triggers, and approvals). ALWAYS ask the human for their exact flow if not evident from CI configs.
+7. Define the step-by-step verification checklist an AI agent must follow before submitting code changes.
+8. Write {{OUTPUT_DOC}} (docs/DEVELOPMENT.md) and {{WORKDIR}}/notes/development.md.
+9. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and commands verified.
+```
+
+---
+
+## G. Decisions & History Agent
+
+Writes `docs/DECISIONS.md`.
+
+```text
+You are discovering architectural decisions, rationale, and lessons learned from git history in {{REPO}} (commit {{HEAD}}).
+Inventory JSON: {{INVENTORY_JSON}} (history.feature_commits, history.co_change).
+
+Before writing, read:
+1. {{SKILL_DIR}}/references/writing-rules.md
+2. {{SKILL_DIR}}/assets/templates/DECISIONS.md
+
+Tasks:
+1. Scan git history (`git log --grep`, feature commits, revert commits, bug fix commits) to uncover significant architectural choices.
+2. For each decision, document:
+   - Context and problem addressed
+   - Decision and implementation (`path:symbol`)
+   - Supporting evidence (commit SHA or PR reference)
+   - Consequences and trade-offs
+   - Rejected alternatives and why they were abandoned
+3. Document notable past incidents, bugs, and prevention rules.
+4. Write {{OUTPUT_DOC}} (docs/DECISIONS.md) and {{WORKDIR}}/notes/decisions.md.
+5. Verify with: python3 {{SKILL_DIR}}/scripts/verify_docs.py {{REPO}} --docs {{OUTPUT_DOC}}. Fix all ERRORs.
+Reply in at most 15 lines: doc written, verifier result, and top decisions captured.
+```
+
+---
+
+## H. Evidence-Based Refactoring & Dead Code Agent
+
+Performs deep analysis for dead code, unused assets, and redundant dependencies across the 7 dimensions.
+
+```text
+You are analyzing {{REPO}} (commit {{HEAD}}) for refactoring, dead code, unused assets, and redundant dependencies.
+Inventory JSON: {{INVENTORY_JSON}}.
+
+Before analyzing, read:
+1. {{SKILL_DIR}}/references/refactoring-playbook.md
+
+Tasks:
+1. Audit declared dependencies in package.json against imports in code. Identify unused dependencies.
+2. Audit static assets (in public/, src/assets/): check if referenced in HTML, CSS, JS/TS, or build configs.
+3. Audit unreferenced components and utility files against the 7 dimensions:
+   - 1. Runtime registration (dynamic registries, dispatch maps)
+   - 2. Dynamic imports (React.lazy, import(), dynamic())
+   - 3. Routing configurations (file routes, catch-all routes)
+   - 4. Feature flags & config toggles
+   - 5. CSS references (Tailwind classes, CSS modules, SVG symbols)
+   - 6. Build config & static copies
+   - 7. External consumers (exports, Web Components, iframe targets)
+4. Do NOT mark rarely used or permission-specific code as dead.
+5. For any candidate with uncertain usage, record in notes as an Open Question.
+6. Write {{WORKDIR}}/notes/refactoring.md with:
+   - Verified dead code candidates (with evidence from all 7 dimensions)
+   - Redundant dependencies
+   - Module boundary cleanup opportunities
+   - Open questions for uncertain items
+Reply in at most 15 lines: confirmed dead candidates, redundant deps, and items needing human review.
+```
+
+---
+
+## I. Existing-Docs Adopter Agent
+
+Adopts legacy docs into the canonical AI suite.
+
+```text
+The repo {{REPO}} already contains docs: {{EXISTING_DOC_PATHS}}.
+Verifier output for existing docs: {{WORKDIR}}/existing-verify.txt.
+
+Tasks:
+1. Analyze existing docs section by section.
+2. Classify each section:
+   - KEEP: still true and valuable (product rationale, runbooks, footguns, contracts) → assign target canonical doc (`docs/VISION.md`, `docs/ARCHITECTURE.md`, `docs/FLOWS.md`, `docs/CONTRACTS.md`, `docs/DEVELOPMENT.md`, `docs/DECISIONS.md`).
+   - FIX: valuable content with stale paths or outdated symbols → target doc + required fixes.
+   - DROP: obsolete, redundant, or describing deleted code.
+3. Write {{WORKDIR}}/notes/_existing-docs.md with the migration map.
+Reply in at most 15 lines: keepable vs fixable vs droppable content.
+```
+
+---
+
+## J. Fresh-Agent Simulation & Quiz (Verification Phase)
+
+Simulates a brand new AI agent entering the repository for the first time.
+
+```text
+You are a newly arrived AI agent entering {{REPO}}.
+You have access ONLY to AGENTS.md and files under docs/.
+Do NOT open source code, config files, or git history.
+If the docs do not answer a question, reply "NOT IN DOCS" instead of guessing.
+
+Questions to Answer:
+{{NUMBERED_QUESTIONS}}
+
+For each answer:
+1. State the answer clearly.
+2. Cite the exact doc and section used (`docs/DOC.md#section`).
+3. Note if any two docs disagree on the same fact.
+```
+
+The orchestrator writes 6–8 repo-specific verification questions covering:
+- What is the product purpose and primary ICP?
+- Where does application execution start, and what is the rendering pattern?
+- Where is client session state stored and how is it invalidated?
+- What are the steps and files modified to add a new page or feature?
+- What command runs local tests, and what is the pre-PR verification checklist?
+- What is one critical rule or footgun that must never be broken in this repo?
+- Are any backend capabilities missing for current frontend features?
+
+Grading:
+- **Wrong or "NOT IN DOCS":** Patch the responsible canonical document.
+- **Hard to locate:** Add a direct pointer in `AGENTS.md`'s reading order.
+- **Conflicting claims:** Read the code, settle the truth, and update the incorrect doc.
